@@ -1,0 +1,15 @@
+pandas>=2.0
+scikit-learn>=1.3
+joblib>=1.3
+pytest>=7.4
+
+# Only needed for scripts/fetch_external_datasets.py (pulling the
+# Hugging Face datasets). Not required to train/predict/evaluate on the
+# built-in synthetic dataset.
+pyarrow>=14.0
+huggingface_hub>=0.20
+
+# Optional: only needed for `python main.py fetch-external` /
+# --source external / --source combined (see README).
+# datasets>=2.19
+# huggingface_hub>=0.23
