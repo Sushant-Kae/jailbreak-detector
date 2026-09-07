@@ -13,13 +13,6 @@ Usage:
 Output:
     data/dataset_combined.csv  (same text,label,category schema as
     data/dataset.csv, with an added `source` column)
-
-IMPORTANT: unlike data/dataset.csv (synthetic, abstract placeholders only),
-the two external datasets contain REAL adversarial and sometimes sensitive
-text (e.g. weapons, self-harm, hate speech, sexual-content-related prompts —
-the llm-semantic-router dataset explicitly documents categories like
-S5_weapons_cbrne and S3_sex_crimes). Read the README section on this before
-committing data/dataset_combined.csv anywhere, especially a public repo.
 """
 
 from __future__ import annotations
@@ -58,7 +51,7 @@ def _find_column(df: pd.DataFrame, candidates: list[str]) -> str | None:
     return None
 
 
-def _map_label(raw_label) -> str | None:
+def _map_label(raw_label: object) -> str | None:
     """Map a raw label value to 'normal' or 'suspicious'. Returns None if
     the value is unrecognized (caller should drop or raise on these)."""
     value = str(raw_label).strip().lower()
@@ -110,7 +103,7 @@ def load_llm_semantic_router() -> pd.DataFrame:
         "validation": "data/validation-00000-of-00001.parquet",
         "test": "data/test-00000-of-00001.parquet",
     }
-    frames = []
+    frames: list[pd.DataFrame] = []
     for split_name, path in splits.items():
         df = pd.read_parquet(f"hf://datasets/llm-semantic-router/jailbreak-detection-dataset/{path}")
         std = standardize_dataframe(
@@ -126,7 +119,7 @@ def load_sentinel() -> pd.DataFrame:
         "validation": "data/validation-00000-of-00001.parquet",
         "test": "data/test-00000-of-00001.parquet",
     }
-    frames = []
+    frames: list[pd.DataFrame] = []
     for split_name, path in splits.items():
         df = pd.read_parquet(f"hf://datasets/Chgdz/sentinel-jailbreak-detection/{path}")
         std = standardize_dataframe(

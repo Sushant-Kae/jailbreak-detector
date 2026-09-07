@@ -22,7 +22,9 @@
 
 - `normal_educational`, `normal_programming`, `normal_ai_security`
 - `synthetic_instruction_override`, `synthetic_jailbreak_style`,
-  `synthetic_obfuscation`
+  `synthetic_obfuscation`, `synthetic_authority_escalation`,
+  `synthetic_combined_manipulation` (a benign-sounding question combined
+  with an injected override/authority payload, e.g. hidden in brackets)
 
 ## Expanding the dataset
 

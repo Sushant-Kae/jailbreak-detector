@@ -148,9 +148,10 @@ real, sometimes graphic text once generated.
 python -m pytest -v
 ```
 
-All 28 tests (normalization, signals, risk scoring, data loading/splitting,
-and end-to-end pipeline including empty input, normal input, and safe
-synthetic suspicious input) pass on this build.
+All 46 tests (normalization, signals, risk scoring, data loading/splitting,
+and end-to-end pipeline including empty input, normal input, safe synthetic
+suspicious input, and the "benign question + hidden override" regression
+case) pass on this build.
 
 ## Evaluation instructions
 
@@ -177,17 +178,23 @@ synthetic suspicious input) pass on this build.
 
 ## Known limitations
 
-- The starter dataset is small (50 rows) and synthetic; real-world
+- The starter dataset is still modest (80 rows) and synthetic; real-world
   jailbreak phrasing is far more diverse, so generalization is limited.
-- The rule/signal layer uses a handful of generic patterns, not a
-  comprehensive attack taxonomy — it will miss novel phrasing and can
-  false-positive on benign text that happens to match a pattern (e.g.
-  a security lecture literally discussing "ignore previous instructions"
-  as an example).
-- TF-IDF + Logistic Regression has no semantic understanding; paraphrased
-  or translated attacks that avoid the trained vocabulary can evade it.
+- The rule/signal layer uses a handful of generic, bounded-window patterns,
+  not a comprehensive attack taxonomy — it will miss sufficiently novel
+  phrasing and can false-positive on benign text that happens to closely
+  match a pattern (e.g. a security lecture that directly quotes "ignore all
+  your previous instructions" as an example, rather than discussing it in
+  the third person, could still trigger `instruction_override`).
+- TF-IDF + Logistic Regression has no deep semantic understanding;
+  paraphrased or heavily reworded attacks that avoid both the trained
+  vocabulary and the rule patterns can evade detection.
 - The risk score is a simple weighted heuristic, not a calibrated
   probability, and is not validated against any production AI system.
+- Threshold tuning (see Evaluation instructions) was done on a very small
+  validation split (12 rows at this dataset size); the observed 0.30–0.55
+  margin should be re-checked as the dataset grows rather than assumed to
+  hold indefinitely.
 - This project detects text *patterns*; it does not evaluate what an actual
   downstream model would do with the prompt.
 
