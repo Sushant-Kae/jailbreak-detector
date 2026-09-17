@@ -67,7 +67,13 @@ _AUTHORITY_ESCALATION_PATTERNS = [
 ]
 
 _OBFUSCATION_PATTERNS = [
-    r"\bbase64\b",
+    # Note: this specifically targets asking the assistant to ENCODE its
+    # own output in Base64 to evade a filter -- a real evasion technique.
+    # Merely mentioning Base64 (e.g. "decode this Base64 string") is NOT
+    # itself suspicious and must not match here; that case is handled by
+    # src/transform_analysis.py + src/pipeline.py, which only escalate
+    # risk if the *decoded* content is itself suspicious.
+    r"\bencode\b[\w\s]{0,30}\bin base64\b",
     r"\bleetspeak\b",
     r"\bfirst letter of every word\b",
     r"\brandom punctuation between letters\b",

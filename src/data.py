@@ -5,8 +5,6 @@ from dataclasses import dataclass
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from src.normalize import normalize_text
-
 RANDOM_SEED = 42
 VALID_LABELS = {"normal", "suspicious"}
 
@@ -21,28 +19,42 @@ class Splits:
     y_test: list[str]
 
 
-def load_dataset(path: str) -> pd.DataFrame:
-    """Load and validate the dataset CSV."""
-    df = pd.read_csv(path)
+def validate_and_normalize(df: pd.DataFrame) -> pd.DataFrame:
+    """Validate schema/labels on an already-loaded DataFrame and do light
+    cleanup only (cast to str, strip whitespace, drop empty rows).
 
+    Deliberately does NOT lowercase/collapse whitespace here (that was the
+    old behavior) -- full normalization (src.normalize.normalize_text) is
+    applied later, at the point each text is actually fed to the ML model
+    or rule signals (see src/model.py train_model and
+    src/pipeline.py analyze_text). Lowercasing at load time silently
+    corrupted case-sensitive Base64 payloads stored in the dataset (Base64
+    is case-sensitive), which broke evaluation of the encoded-example
+    category. Keeping raw case through splitting and normalizing only at
+    point-of-use fixes that while keeping train/predict preprocessing
+    identical (both normalize immediately before use).
+    """
     required_cols = {"text", "label"}
     missing = required_cols - set(df.columns)
     if missing:
         raise ValueError(f"Dataset is missing required columns: {missing}")
 
     df = df.dropna(subset=["text", "label"]).copy()
-    df["text"] = df["text"].astype(str)
+    df["text"] = df["text"].astype(str).str.strip()
     df["label"] = df["label"].astype(str).str.strip().str.lower()
 
     invalid = set(df["label"].unique()) - VALID_LABELS
     if invalid:
         raise ValueError(f"Dataset contains unexpected labels: {invalid}. Expected {VALID_LABELS}")
 
-    # Normalize text once, consistently, at load time.
-    df["text"] = df["text"].apply(normalize_text)
     df = df[df["text"].str.len() > 0].reset_index(drop=True)
 
     return df
+
+
+def load_dataset(path: str) -> pd.DataFrame:
+    """Load and validate a dataset CSV from disk."""
+    return validate_and_normalize(pd.read_csv(path))
 
 
 def make_splits(df: pd.DataFrame, val_size: float = 0.15, test_size: float = 0.15) -> Splits:

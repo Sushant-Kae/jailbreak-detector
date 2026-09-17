@@ -4,3 +4,5 @@ __pycache__/
 .pytest_cache/
 models/*.joblib
 results/*.json
+data/reviewed_examples.csv
+eval/category_eval_results.csv

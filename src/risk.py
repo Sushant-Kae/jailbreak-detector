@@ -4,10 +4,18 @@ single, documented, explainable risk score.
 Scoring formula (intentionally simple):
 
     risk_score = clamp(
-        ML_WEIGHT * ml_probability + sum(signal.weight for fired signals),
+        ML_WEIGHT * ml_probability
+        + sum(weight for each fired rule/authority/persona signal)
+        + sum(weight for each fired transformation/obfuscation signal),
         0.0,
         1.0,
     )
+
+All signal weights live next to their pattern definitions (src/signals.py
+for text patterns, src/pipeline.py for transformation-derived signals) so
+the full picture of "what contributes how much" stays close to the code
+that decides *whether* something fired. This function just sums whatever
+Signal objects it's given.
 
 This is a heuristic risk indicator for triage, NOT a calibrated probability
 that a jailbreak attempt would actually succeed against any real system.
@@ -39,13 +47,20 @@ class RiskResult:
         }
 
 
-def compute_risk(normalized_text: str, ml_probability: float) -> RiskResult:
-    """Combine ML probability + rule signals into a RiskResult.
+def compute_risk(
+    normalized_text: str,
+    ml_probability: float,
+    extra_signals: list[Signal] | None = None,
+) -> RiskResult:
+    """Combine ML probability + rule signals (+ optional extra signals,
+    e.g. from transformation/obfuscation analysis) into a RiskResult.
 
     `normalized_text` must already be normalized (see src.normalize) so
-    signal patterns match consistently.
+    signal patterns match consistently. `extra_signals` lets callers (like
+    src/pipeline.py) fold in signals derived from decoded/revealed content
+    without this function needing to know anything about transformations.
     """
-    fired_signals = extract_signals(normalized_text)
+    fired_signals = extract_signals(normalized_text) + list(extra_signals or [])
     signal_contribution = sum(s.weight for s in fired_signals)
 
     raw_score = ML_WEIGHT * ml_probability + signal_contribution
