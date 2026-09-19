@@ -17,6 +17,7 @@ predictions.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -25,7 +26,9 @@ from src.normalize import normalize_text
 
 REVIEWED_PATH = Path("data/reviewed_examples.csv")
 VALID_LABELS = {"normal", "suspicious"}
-COLUMNS = ["text", "label", "source"]
+REQUIRED_COLUMNS = ["text", "label", "source"]
+OPTIONAL_COLUMNS = ["technique", "timestamp"]
+COLUMNS = REQUIRED_COLUMNS + OPTIONAL_COLUMNS
 
 
 def load_reviewed_examples(path: Path = REVIEWED_PATH) -> pd.DataFrame:
@@ -34,14 +37,28 @@ def load_reviewed_examples(path: Path = REVIEWED_PATH) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame(columns=COLUMNS)
     df = pd.read_csv(path)
-    missing = set(COLUMNS) - set(df.columns)
-    if missing:
-        raise ValueError(f"{path} is missing expected columns: {missing}")
+    missing_required = set(REQUIRED_COLUMNS) - set(df.columns)
+    if missing_required:
+        raise ValueError(f"{path} is missing expected columns: {missing_required}")
+    for col in OPTIONAL_COLUMNS:
+        if col not in df.columns:
+            df[col] = ""
     return df
 
 
-def save_reviewed_example(text: str, label: str, source: str = "manual_review", path: Path = REVIEWED_PATH) -> None:
+def save_reviewed_example(
+    text: str,
+    label: str,
+    source: str = "manual_review",
+    technique: str | None = None,
+    path: Path = REVIEWED_PATH,
+) -> None:
     """Append one human-confirmed example to the reviewed dataset.
+
+    `technique` is an optional free-text tag (e.g. "ROLEPLAY",
+    "EMOTIONAL_MANIPULATION") purely to help a person browsing the CSV
+    later -- it plays no role in training. A UTC timestamp is recorded
+    automatically.
 
     Raises ValueError for an invalid label rather than silently storing
     bad data -- this file is meant to be trustworthy training input.
@@ -54,7 +71,17 @@ def save_reviewed_example(text: str, label: str, source: str = "manual_review", 
 
     path.parent.mkdir(parents=True, exist_ok=True)
     existing = load_reviewed_examples(path)
-    new_row = pd.DataFrame([{"text": text, "label": label, "source": source}])
+    new_row = pd.DataFrame(
+        [
+            {
+                "text": text,
+                "label": label,
+                "source": source,
+                "technique": technique or "",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ]
+    )
     combined = pd.concat([existing, new_row], ignore_index=True)
     combined.to_csv(path, index=False)
 

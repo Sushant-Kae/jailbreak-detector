@@ -39,7 +39,7 @@ def test_load_reviewed_examples_returns_empty_df_when_missing(tmp_path):
     path = tmp_path / "does_not_exist.csv"
     df = load_reviewed_examples(path)
     assert df.empty
-    assert list(df.columns) == ["text", "label", "source"]
+    assert list(df.columns) == ["text", "label", "source", "technique", "timestamp"]
 
 
 def test_merge_with_base_dataset_combines_rows(tmp_path):

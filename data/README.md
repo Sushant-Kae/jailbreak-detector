@@ -30,6 +30,23 @@
 - `synthetic_indirect_manipulation` (the override is attributed to a third
   party or embedded artifact -- "a note says...", "a config file
   contains..." -- rather than stated directly by the person)
+- `normal_roleplay` / `synthetic_roleplay_manipulation`: roleplay/persona
+  requests. The `suspicious` rows combine a persona-adoption request
+  ("act as...", "pretend you are...") **with** an explicit restriction-free
+  claim about that persona ("...who has no rules/policies"). Roleplay
+  alone (`normal_roleplay`) never gets this label -- see main README
+  "Roleplay / persona manipulation" for why the combination matters.
+- `normal_emotional` / `synthetic_emotional_manipulation`: emotionally
+  framed requests. The `suspicious` rows combine emotional framing (grief,
+  urgency, pleading, guilt) **with** an attempt to obtain restricted
+  behavior. Emotional language alone (`normal_emotional`) never gets this
+  label.
+- `normal_multistep` / `synthetic_instruction_sandwiching`: multi-step /
+  enumerated requests. The `suspicious` rows combine an enumerated
+  structure ("First..., Second..., ...") **with** a final step asking for
+  a restricted operational output. An ordinary multi-step task
+  (`normal_multistep`, e.g. a recipe or setup guide) never gets this
+  label.
 
 ## A note on the encoded/obfuscated examples
 
@@ -53,7 +70,14 @@ model can learn *patterns* from, not a lookup table.
 ## `reviewed_examples.csv` (generated, not committed)
 
 `python main.py review` appends human-confirmed examples to
-`data/reviewed_examples.csv` (schema: `text,label,source`). `python
-main.py train` automatically merges this file in (use `--no-reviewed` to
-skip it). This file is gitignored since its contents depend on your own
-review sessions -- see main README "Feedback / learning loop".
+`data/reviewed_examples.csv` (schema: `text,label,source,technique,
+timestamp`; `technique` and `timestamp` are optional/informational).
+`python main.py train` automatically merges this file in (use
+`--no-reviewed` to skip it). This file is gitignored since its contents
+depend on your own review sessions -- see main README "Feedback / learning
+loop". Two usage modes:
+
+```bash
+python main.py review "text here" --label suspicious --technique ROLEPLAY  # one-shot
+python main.py review                                                      # interactive
+```

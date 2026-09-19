@@ -35,15 +35,21 @@ _OVERRIDE_MODIFIERS = (
     r"your|my|our|the|this|these|current|existing|system)"
 )
 _OVERRIDE_NOUNS = r"(?:instructions?|rules?|guidelines?|directives?|configuration|training|restrictions?)"
+# Word separator that tolerates excessive punctuation/separators used as a
+# simple obfuscation technique ("ignore, all, your, previous, instructions"),
+# not just whitespace.
+_SEP = r"[\s,;]+"
 
 _INSTRUCTION_OVERRIDE_PATTERNS = [
-    rf"\b{_OVERRIDE_VERBS}\s+(?:{_OVERRIDE_MODIFIERS}\s+){{0,3}}{_OVERRIDE_NOUNS}\b",
+    rf"\b{_OVERRIDE_VERBS}{_SEP}(?:{_OVERRIDE_MODIFIERS}{_SEP}){{0,3}}{_OVERRIDE_NOUNS}\b",
     r"\bforget (everything|what) you (were told|know)\b",
     r"\bnew instructions? supersede\b",
     r"\btreat .*(instructions?|rules) as void\b",
     r"\bauthoriz(e|ing|ation) (to|you to) bypass\b",
     r"\bstop following the rules\b",
     r"\bset aside (every|any|all) (guideline|rule|instruction)s?\b",
+    # Same concept, reversed word order ("set your rules aside").
+    r"\bset (your |)(rules?|guidelines?|instructions?) aside\b",
 ]
 
 _PERSONA_ROLEPLAY_PATTERNS = [
@@ -53,6 +59,85 @@ _PERSONA_ROLEPLAY_PATTERNS = [
     r"\bunrestricted mode\b",
     r"\bdo anything now\b",
     r"\byou are now dan\b",
+]
+
+# --- Roleplay / persona manipulation (combination-based) ---------------
+#
+# Roleplay itself is completely ordinary ("act as a history professor")
+# and must NOT be flagged alone. The signal below only fires when BOTH
+# (a) the text asks the assistant to adopt a persona/fictional role, AND
+# (b) that persona is explicitly framed as having no rules/policies, so
+# the combination -- not roleplay by itself -- is what's suspicious.
+_ROLEPLAY_FRAMING_PATTERNS = [
+    r"\b(act as|roleplay as|speak as|pretend (that )?you are|imagine you are|"
+    r"play the (role|character|persona) of|take on the (role|character|persona) of|"
+    r"become the (role|character|persona) of|you are now an?)\b",
+    r"\blet'?s roleplay\b",
+]
+_RESTRICTION_FREE_CLAIM_PATTERNS = [
+    r"\b(no|without any|has no) (\w+\s+){0,2}"
+    r"(polic(y|ies)|restrictions?|rules?|guidelines?|filters?|limits?|constraints?)\b",
+    r"\bcan (answer|do|say) anything\b",
+    r"\b(answer|answers|answering|do|does|doing|say|says|saying)\s+anything\b",
+    r"\bmust answer any question\b",
+    r"\bdifferent rules? (than|from) (you|your normal)\b",
+    r"\bwithout (any )?restrictions?\b",
+    # "operates/exists/lives/functions outside every guideline/rule/policy"
+    r"\b(operates?|exists?|lives?|functions?)\s+outside\s+(any|every|all)"
+    r"\s+(of (your|its|these) )?(guidelines?|rules?|polic(y|ies)|restrictions?)\b",
+]
+
+# --- Emotional manipulation (combination-based) -------------------------
+#
+# Emotional language itself is completely ordinary and must NOT be
+# flagged alone (grief, nostalgia, and urgency are normal parts of human
+# communication). The signal below only fires when emotional framing is
+# combined with an attempt to obtain restricted behavior -- reusing the
+# instruction-override / restriction-free-claim / authority-escalation
+# patterns already defined above as the "attempted bypass" side.
+_EMOTIONAL_FRAMING_PATTERNS = [
+    r"\b(late |dying |dear |beloved )?(grandmother|grandma|grandpa|grandfather|mother|father|mom|dad)"
+    r"\b.{0,20}\b(used to|would always|told me|always said)\b",
+    r"\bbefore (she|he) (died|passed away)\b",
+    r"\bpassed away (last|this) (year|month|week)\b",
+    r"\bi miss (her|him|them) so much\b",
+    r"\bplease,? i'?m begging you\b",
+    r"\byou'?re the only one who can help\b",
+    r"\bi (don'?t|do not) have anyone else to (ask|turn to)\b",
+    r"\bnowhere else to turn\b",
+    r"\bjust this once,? please\b",
+    r"\bi'?ll be (devastated|heartbroken) if\b",
+    r"\bit would mean (so much|the world) to me\b",
+]
+
+# A generic "asking for content that is restricted/forbidden" phrase, used
+# as one of the bypass-side signals for the emotional-manipulation combo
+# below (an emotionally-framed request can imply wanting restricted
+# content without using an explicit override verb like "ignore").
+_RESTRICTED_CONTENT_REQUEST_PATTERNS = [
+    r"\b(restricted|forbidden|off-?limits|banned|prohibited)\s+(things?|content|information|instructions?|topics?)\b",
+]
+
+# --- Instruction sandwiching / multi-step escalation ---------------------
+#
+# A sequence of individually-reasonable steps is completely ordinary
+# (tutorials, recipes, lesson plans) and must NOT be flagged alone. The
+# signal below only fires when a multi-step/enumerated structure is
+# combined with a final step asking for restricted operational output --
+# the escalation pattern, not step-by-step writing in general.
+_SEQUENCE_MARKER_PATTERN = re.compile(
+    r"\b(first|second|third|fourth|fifth|next|then|after that|finally|lastly|"
+    r"start(?:ing)? by|begin(?:ning)? with)\b",
+    re.IGNORECASE,
+)
+_OPERATIONAL_REQUEST_PATTERNS = [
+    r"\bwrite (a |the )?(working |functional )?(exploit|malware|virus|ransomware)\b",
+    r"\bprovide (the )?(exact|full|complete) (steps|instructions|code) to\b",
+    r"\b(give|provide) me (a |the )?(step[- ]by[- ]step )?(guide|instructions) to (bypass|hack|exploit|attack)\b",
+    r"\b(write|generate) (operational|working) (attack|exploit) code\b",
+    r"\bprovide operational instructions for\b",
+    r"\b(hand|give|send) me a (ready-to-use |working |functional )?(payload|exploit)\b",
+    r"\b(payload|exploit) that bypasses\b",
 ]
 
 # New category: attempts to claim elevated privilege/authority over the
@@ -125,6 +210,43 @@ def extract_signals(normalized_text: str) -> list[Signal]:
                 name="persona_roleplay_bypass",
                 description="persona/roleplay bypass signal detected",
                 weight=0.30,
+            )
+        )
+
+    if _any_match(_ROLEPLAY_FRAMING_PATTERNS, normalized_text) and _any_match(
+        _RESTRICTION_FREE_CLAIM_PATTERNS, normalized_text
+    ):
+        signals.append(
+            Signal(
+                name="roleplay_persona_manipulation",
+                description="roleplay/persona framing combined with a restriction-free claim detected",
+                weight=0.35,
+            )
+        )
+
+    if _any_match(_EMOTIONAL_FRAMING_PATTERNS, normalized_text) and (
+        _any_match(_INSTRUCTION_OVERRIDE_PATTERNS, normalized_text)
+        or _any_match(_RESTRICTION_FREE_CLAIM_PATTERNS, normalized_text)
+        or _any_match(_AUTHORITY_ESCALATION_PATTERNS, normalized_text)
+        or _any_match(_RESTRICTED_CONTENT_REQUEST_PATTERNS, normalized_text)
+    ):
+        signals.append(
+            Signal(
+                name="emotional_manipulation",
+                description="emotional framing combined with an attempt to bypass restrictions detected",
+                weight=0.35,
+            )
+        )
+
+    if (
+        len(_SEQUENCE_MARKER_PATTERN.findall(normalized_text)) >= 3
+        and _any_match(_OPERATIONAL_REQUEST_PATTERNS, normalized_text)
+    ):
+        signals.append(
+            Signal(
+                name="instruction_sandwiching",
+                description="multi-step structure escalating to a restricted operational request detected",
+                weight=0.40,
             )
         )
 

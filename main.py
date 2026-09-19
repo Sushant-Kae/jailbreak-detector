@@ -8,6 +8,7 @@ Usage:
     python main.py predict --stdin
     python main.py evaluate
     python main.py review                      # interactive human feedback loop
+    python main.py review "text here" --label suspicious --technique ROLEPLAY  # one-shot
 
 By default, train/evaluate use data/dataset.csv (the small synthetic
 starter set). Run `python scripts/fetch_external_datasets.py` first and
@@ -81,6 +82,8 @@ def cmd_predict(args: argparse.Namespace) -> None:
     print("Reasons:")
     for reason in result.reasons:
         print(f"- {reason}")
+    if result.classification == "suspicious":
+        print(f"Technique: {result.technique}")
 
 
 def cmd_evaluate(args: argparse.Namespace) -> None:
@@ -95,14 +98,29 @@ def cmd_evaluate(args: argparse.Namespace) -> None:
 
 
 def cmd_review(args: argparse.Namespace) -> None:
-    """Interactive, human-in-the-loop feedback session.
+    """Human-in-the-loop feedback. Two modes:
 
-    Workflow: enter a prompt -> see the prediction/reasons -> confirm or
-    correct the label -> save as a reviewed example. The model is NOT
-    retrained here -- run `python main.py train` afterward to incorporate
-    reviewed examples. This separation is deliberate: it prevents the
-    detector from ever updating itself based on its own unverified guess.
+    1. One-shot: `python main.py review "text here" --label suspicious`
+       (optionally `--technique ROLEPLAY`) -- saves immediately, no prompts.
+    2. Interactive (no text given): enter a prompt -> see the
+       prediction/reasons -> confirm or correct the label -> save.
+
+    Neither mode retrains the model -- run `python main.py train`
+    afterward to incorporate reviewed examples. This separation is
+    deliberate: it prevents the detector from ever updating itself based
+    on its own unverified guess.
     """
+    if args.text and args.label:
+        save_reviewed_example(args.text, args.label, source="manual_review", technique=args.technique)
+        print(f"Saved reviewed example ({args.label}) to data/reviewed_examples.csv.")
+        print("Run `python main.py train` to retrain including this example.")
+        return
+
+    if args.text and not args.label:
+        print("Provide --label normal|suspicious when passing text directly, "
+              "or omit the text argument to start an interactive session.")
+        return
+
     pipeline = load_model(MODEL_PATH)
     print("Feedback review session. Press Enter on an empty prompt to stop.\n")
 
@@ -126,7 +144,8 @@ def cmd_review(args: argparse.Namespace) -> None:
             print(f"  '{label}' is not a valid label (expected 'normal' or 'suspicious'); skipping.\n")
             continue
 
-        save_reviewed_example(text, label, source="manual_review")
+        technique = input("  Technique (optional, e.g. ROLEPLAY, EMOTIONAL_MANIPULATION; Enter to skip): ").strip()
+        save_reviewed_example(text, label, source="manual_review", technique=technique or None)
         saved_count += 1
         print(f"  Saved as reviewed example ({label}).\n")
 
@@ -169,7 +188,12 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_parser.set_defaults(func=cmd_evaluate)
 
     review_parser = subparsers.add_parser(
-        "review", help="Interactive human feedback loop: confirm labels for new examples"
+        "review", help="Human feedback loop: confirm labels for new examples"
+    )
+    review_parser.add_argument("text", nargs="?", default="", help="Prompt text (one-shot mode)")
+    review_parser.add_argument("--label", choices=["normal", "suspicious"], help="Confirmed label (one-shot mode)")
+    review_parser.add_argument(
+        "--technique", default=None, help="Optional technique tag, e.g. ROLEPLAY, EMOTIONAL_MANIPULATION"
     )
     review_parser.set_defaults(func=cmd_review)
 
